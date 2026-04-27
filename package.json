@@ -1,0 +1,43 @@
+{
+  "name": "skill-shots",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Skill Shots — paid skill-challenge competition app. Monorepo root.",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "build": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" run build",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "test:cov": "pnpm -r run test:cov",
+    "audit": "pnpm audit --audit-level=moderate",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "esbuild",
+      "prisma"
+    ],
+    "overrides": {
+      "fastify": "4.29.1"
+    }
+  }
+}
