@@ -1,0 +1,60 @@
+# Skill Shots — gitignore
+# Mobile + Node + general dev cruft
+
+node_modules/
+.pnp
+.pnp.js
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.yarn/cache
+.yarn/install-state.gz
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Native
+ios/Pods/
+ios/build/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+
+# Backend
+.env
+.env.local
+.env.*.local
+.next/
+.turbo/
+prisma/migrations/_drafts/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+.history/
+
+# Coverage / build
+coverage/
+*.lcov
+.nyc_output/
+build/
+
+# Stripe / secrets
+*.pem
+*.crt
+.aws/
+.ssh/

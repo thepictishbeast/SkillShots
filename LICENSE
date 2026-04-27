@@ -1,0 +1,7 @@
+License: TBD pending owner decision.
+
+Suggested split:
+- Server / backend code: AGPL-3.0-or-later
+- Mobile shell: MIT
+
+Replace this file with the chosen LICENSE text before public release.
