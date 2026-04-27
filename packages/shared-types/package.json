@@ -1,0 +1,34 @@
+{
+  "name": "@skill-shots/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Zod schemas + TypeScript types shared between api and mobile.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo 'shared-types: lint not configured yet'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@vitest/coverage-v8": "^2.1.4",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
