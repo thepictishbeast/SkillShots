@@ -1,0 +1,38 @@
+name: mobile-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "packages/shared-types/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/mobile-ci.yml"
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "packages/shared-types/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/mobile-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @skill-shots/shared-types build
+      - run: pnpm --filter @skill-shots/mobile typecheck
+      - run: pnpm --filter @skill-shots/mobile test
