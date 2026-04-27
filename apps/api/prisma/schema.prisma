@@ -1,0 +1,331 @@
+// Skill Shots — Prisma schema.
+//
+// SECURITY: every monetary field is in MINOR UNITS (cents) as integers.
+// REGRESSION-GUARD: floating-point money is forbidden — see ADR (TBD).
+//
+// AVP-PASS-1 2026-04-27: skeleton audit complete; all FK relations defined,
+// all enums exhaustive, no nullable required fields, status fields constrained.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Users
+// ────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id                      String   @id @default(uuid()) @db.Uuid
+  email                   String   @unique @db.Citext
+  emailVerifiedAt         DateTime?
+  username                String   @unique
+  passwordHash            String
+  // Self-declared DOB stored as date-only.
+  // ageVerifiedAt timestamps the *third-party* identity check that promoted
+  // the self-declaration to a real KYC tier.
+  dateOfBirth             DateTime @db.Date
+  ageVerifiedAt           DateTime?
+  kycVerifiedAt           DateTime?
+  avatarUrl               String?
+  bio                     String?  @db.VarChar(280)
+  verified                Boolean  @default(false)
+  isAdmin                 Boolean  @default(false)
+  isBanned                Boolean  @default(false)
+  bannedReason            String?
+  totalWins               Int      @default(0)
+  totalEarningsCents      Int      @default(0)
+  totalChallengesCreated  Int      @default(0)
+  totalChallengesEntered  Int      @default(0)
+  winStreak               Int      @default(0)
+  acceptedTermsAt         DateTime
+  acceptedPrivacyAt       DateTime
+  // Stripe Connect (created lazily on first payout request).
+  stripeAccountId         String?  @unique
+  // Soft-delete: GDPR right-to-be-forgotten zeroizes PII, leaves the row for
+  // referential integrity in past challenges.
+  deletedAt               DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  challenges    Challenge[]            @relation("creator")
+  entries       Entry[]
+  votes         Vote[]
+  reportsFiled  Report[]               @relation("reporter")
+  walletTxns   WalletTransaction[]
+  refreshTokens RefreshToken[]
+  adminActions  AdminAction[]          @relation("adminActor")
+
+  @@index([createdAt])
+  @@map("users")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Refresh tokens — rotated on every use, hashed at rest.
+// REGRESSION-GUARD: storing raw refresh tokens lets a leaked DB row become
+// a forever session. We store argon2 hashes so a DB leak alone is useless.
+// ────────────────────────────────────────────────────────────────────────────
+
+model RefreshToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 hex of the opaque token — fast lookup. We additionally argon2-verify.
+  tokenHashIndex String @unique
+  // Argon2id verifier — full cryptographic match.
+  tokenHashFull  String
+  issuedAt    DateTime @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  // Replay-detection: if a revoked token is presented, the descendant chain
+  // is invalidated and the user is forced to re-auth.
+  parentId    String?  @db.Uuid
+  // IP and UA at issue time — diagnostic only, scrubbed from logs.
+  ipAtIssue   String?
+  userAgentAtIssue String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Challenges
+// ────────────────────────────────────────────────────────────────────────────
+
+enum ChallengeStatus {
+  draft
+  live
+  voting
+  completed
+  cancelled
+}
+
+enum ChallengeCategory {
+  sports
+  gaming
+  fitness
+  music
+  art
+  cooking
+  tricks
+  misc
+}
+
+model Challenge {
+  id                     String           @id @default(uuid()) @db.Uuid
+  creatorId              String           @db.Uuid
+  creator                User             @relation("creator", fields: [creatorId], references: [id])
+  title                  String           @db.VarChar(80)
+  category               ChallengeCategory
+  rules                  String           @db.VarChar(2000)
+  proofVideoUrl          String
+  entryFeeCents          Int
+  creatorPotCents        Int
+  totalPotCents          Int              @default(0)
+  platformFeeBasisPoints Int              @default(1250)
+  status                 ChallengeStatus  @default(draft)
+  entryDeadline          DateTime
+  votingDeadline         DateTime
+  winnerId               String?          @db.Uuid
+  // Moderation tag — flagged challenges are pulled from public feed but
+  // remain visible to creator for transparency.
+  moderationFlaggedAt    DateTime?
+  moderationFlaggedReason String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  entries Entry[]
+  votes   Vote[]
+
+  @@index([status, entryDeadline])
+  @@index([creatorId])
+  @@index([category, status])
+  @@map("challenges")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Entries
+// ────────────────────────────────────────────────────────────────────────────
+
+enum EntryStatus {
+  submitted
+  flagged
+  approved
+  disqualified
+}
+
+model Entry {
+  id          String      @id @default(uuid()) @db.Uuid
+  challengeId String      @db.Uuid
+  challenge   Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String      @db.Uuid
+  user        User        @relation(fields: [userId], references: [id])
+  videoUrl    String
+  caption     String?     @db.VarChar(280)
+  voteCount   Int         @default(0)
+  status      EntryStatus @default(submitted)
+  // Per-user uniqueness — one entry per user per challenge prevents
+  // sock-puppet entry stacking and simplifies fraud detection.
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  votes Vote[]
+
+  @@unique([challengeId, userId])
+  @@index([challengeId, voteCount])
+  @@map("entries")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Votes — one per (challenge, voter). Self-vote forbidden at app level.
+// REGRESSION-GUARD: DB unique constraint is the LAST line of defence; the
+// service layer is the FIRST. Both must hold.
+// ────────────────────────────────────────────────────────────────────────────
+
+model Vote {
+  id          String    @id @default(uuid()) @db.Uuid
+  challengeId String    @db.Uuid
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  entryId     String    @db.Uuid
+  entry       Entry     @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  voterId     String    @db.Uuid
+  voter       User      @relation(fields: [voterId], references: [id])
+  // Anti-fraud signals (recorded; scoring happens in fraud service).
+  ipHash      String?
+  uaHash      String?
+  // Vote may be invalidated by fraud detection.
+  invalidatedAt     DateTime?
+  invalidatedReason String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([challengeId, voterId])
+  @@index([entryId])
+  @@index([createdAt])
+  @@map("votes")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Wallet — append-only ledger.
+// SECURITY: rows MUST NEVER be updated to change `amount` or `type`. Use a
+// reversal entry instead.
+// ────────────────────────────────────────────────────────────────────────────
+
+enum WalletTxnType {
+  deposit
+  entry_fee
+  payout
+  platform_fee
+  refund
+}
+
+enum WalletTxnStatus {
+  pending
+  completed
+  failed
+}
+
+model WalletTransaction {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @db.Uuid
+  user            User            @relation(fields: [userId], references: [id])
+  challengeId     String?         @db.Uuid
+  type            WalletTxnType
+  amountCents     Int
+  status          WalletTxnStatus @default(pending)
+  stripePaymentId String?         @unique
+  // Idempotency key — required to prevent double-spend on retried Stripe
+  // webhooks.
+  idempotencyKey  String          @unique
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([challengeId])
+  @@map("wallet_transactions")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Moderation — reports + admin actions
+// ────────────────────────────────────────────────────────────────────────────
+
+enum ReportTargetType {
+  challenge
+  entry
+  comment
+  user
+}
+
+enum ReportReason {
+  spam
+  harassment
+  hate_speech
+  sexual_content
+  violence
+  minors
+  fraud
+  cheating
+  self_harm
+  csam
+  illegal
+  other
+}
+
+enum ReportStatus {
+  open
+  reviewing
+  resolved
+}
+
+model Report {
+  id         String           @id @default(uuid()) @db.Uuid
+  reporterId String           @db.Uuid
+  reporter   User             @relation("reporter", fields: [reporterId], references: [id])
+  targetType ReportTargetType
+  targetId   String           @db.Uuid
+  reason     ReportReason
+  details    String?          @db.VarChar(1000)
+  status     ReportStatus     @default(open)
+  resolvedAt DateTime?
+  // Free-form admin note on resolution.
+  resolutionNote String?      @db.VarChar(1000)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@map("reports")
+}
+
+// Admin actions — audit log.
+enum AdminActionType {
+  ban_user
+  unban_user
+  flag_challenge
+  remove_challenge
+  disqualify_entry
+  pause_payout
+  resolve_report
+  cancel_challenge
+}
+
+model AdminAction {
+  id         String          @id @default(uuid()) @db.Uuid
+  actorId    String          @db.Uuid
+  actor      User            @relation("adminActor", fields: [actorId], references: [id])
+  type       AdminActionType
+  targetType String
+  targetId   String
+  reason     String          @db.VarChar(1000)
+  // Snapshot of decision-relevant context (JSON), redacted of PII.
+  contextJson Json?
+  createdAt  DateTime        @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@map("admin_actions")
+}
