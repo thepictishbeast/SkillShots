@@ -96,10 +96,71 @@ combination. Before launch:
 
 See `LEGAL_NOTES.md`.
 
+## Repo layout
+
+```
+.
+├── apps/
+│   ├── api/                  NestJS + Fastify + Prisma + Postgres
+│   └── mobile/               Expo Router + React Native
+├── packages/
+│   └── shared-types/         Zod schemas shared by api and mobile
+├── infra/
+│   ├── docker-compose.yml    postgres + minio + redis (dev only)
+│   └── postgres/init.sql     citext + pgcrypto
+├── .github/workflows/        api-ci, mobile-ci, security (CodeQL+audit+gitleaks)
+├── docs/
+│   ├── SECURITY.md           threat model + vuln disclosure
+│   ├── CONTRIBUTING.md       dev loop + AVP-2 gates
+│   ├── ENV.md                authoritative env-var reference
+│   ├── AVP-NOTES.md          per-pass AVP-2 ledger
+│   └── OPS.md                production runbook (initial)
+├── ARCHITECTURE.md           full app + data + API spec
+├── ROADMAP.md                MVP build order
+├── LEGAL_NOTES.md            paid-competition + voting compliance
+└── README.md                 (this file)
+```
+
+## Quick start
+
+```bash
+nvm use && corepack enable
+pnpm install
+pnpm infra:up
+cd apps/api
+cp .env.example .env
+# Replace JWT_*_SECRET with `openssl rand -base64 64` (twice, different).
+pnpm prisma migrate dev
+pnpm dev          # API on :4000
+```
+
+In another shell:
+
+```bash
+cd apps/mobile
+pnpm start        # Expo dev server
+```
+
 ## Status
 
-Pre-code. This repo is the architecture spec + roadmap. First commit:
-{date here}.
+**Phase-1 backend foundation + mobile shell shipped 2026-04-27.**
+
+| Layer                    | State                                          |
+|--------------------------|------------------------------------------------|
+| Auth (signup/login/refresh) | ✅ argon2id + JWT + opaque rotating refresh   |
+| Profiles                 | ✅                                              |
+| Video upload             | ✅ presigned-POST to S3/R2/Minio                |
+| Challenge create + list  | ✅                                              |
+| Entries                  | ✅ one-per-user-per-challenge enforced          |
+| Voting + fraud scorer    | ✅ skeleton with auto-flag at score ≥75         |
+| Wallet ledger            | ⚠️  schema + balance read; payout = Phase 3   |
+| Moderation + admin panel | ✅ reports endpoint + admin resolve            |
+| Mobile shell (auth+arena+detail) | ✅                                       |
+| Stripe Connect           | ❌ Phase 3                                      |
+| CSAM scan                | ❌ Pre-launch mandatory                         |
+
+65 tests passing (24 shared-types + 41 api). See `docs/AVP-NOTES.md`
+for the AVP-2 pass ledger and `docs/SECURITY.md` for the threat model.
 
 ## License
 
